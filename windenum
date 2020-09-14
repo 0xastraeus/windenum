@@ -1,0 +1,143 @@
+#!/usr/bin/python3
+
+import socket
+import re
+import os
+import signal
+import time
+import threading
+import sys
+import subprocess
+import argparse
+import optparse
+from queue import Queue
+from datetime import datetime
+from colorama import Fore
+
+# Start WINDEnum with clear terminal
+subprocess.call('clear', shell=True)
+
+# Main Function
+def main():
+    '''
+    Does a full port scan on target, then sends ports discovered to a NMAP service scan
+    '''
+    
+    # Takes a positional argument of host. Ex: windenum <target host>
+    parser = argparse.ArgumentParser('windenum <target host>')
+    parser.add_argument("host", help="Host to scan.")
+    args = parser.parse_args()
+    target = args.host
+
+    socket.setdefaulttimeout(0.30)
+    print_lock = threading.Lock()
+    discovered_ports = []
+    
+    # Banner
+    print(Fore.YELLOW + "=" * 60 + Fore.RED)
+    print(" ██╗    ██╗██╗███╗   ██╗██████╗ ")
+    print(" ██║    ██║██║████╗  ██║██╔══██╗     "+Fore.RESET+"Version: 1.0"+Fore.RED)
+    print(" ██║ █╗ ██║██║██╔██╗ ██║██║  ██║     "+Fore.RESET+"Author: Astraeus"+Fore.RED)
+    print(" ██║███╗██║██║██║╚██╗██║██║  ██║")
+    print(" ╚███╔███╔╝██║██║ ╚████║██████╔╝")
+    print("  ╚══╝╚══╝ ╚═╝╚═╝  ╚═══╝╚═════╝")
+
+    print(" ███████╗███╗   ██╗██╗   ██╗███╗   ███╗")
+    print(" ██╔════╝████╗  ██║██║   ██║████╗ ████║")
+    print(" █████╗  ██╔██╗ ██║██║   ██║██╔████╔██║")
+    print(" ██╔══╝  ██║╚██╗██║██║   ██║██║╚██╔╝██║")
+    print(" ███████╗██║ ╚████║╚██████╔╝██║ ╚═╝ ██║")
+    print(" ╚══════╝╚═╝  ╚═══╝ ╚═════╝ ╚═╝     ╚═╝")
+
+
+    print(Fore.YELLOW + "=" * 60 + Fore.RESET)
+    time.sleep(1)
+    error = ("Invalid Input")
+    
+    # If host is invalid
+    try:
+        t_ip = socket.gethostbyname(target)
+    except (UnboundLocalError, socket.gaierror):
+        print("\n[-]Invalid format. Please use a correct IP or web address[-]\n")
+        sys.exit()
+    
+    # Displays host being scanned and time started
+    print("Scanning target " + Fore.GREEN + t_ip + Fore.RESET)
+    print("Time started: "+ str(datetime.now()))
+    print(Fore.YELLOW + "=" * 60 + Fore.RESET)
+    t1 = datetime.now()
+
+    def portscan(port):
+        '''
+        Takes port and displays if it is open
+        '''
+        s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        
+        try:
+            con = s.connect((t_ip, port))
+            with print_lock:
+                print("Port {} is open".format(port))
+                discovered_ports.append(str(port))
+            con.close()
+
+        except (ConnectionRefusedError, AttributeError, OSError):
+            pass
+
+
+    def threader():
+        while True:
+            worker = q.get()
+            portscan(worker)
+            q.task_done()
+      
+    q = Queue()
+     
+    #startTime = time.time()
+     
+    for x in range(200):
+       t = threading.Thread(target = threader)
+       t.daemon = True
+       t.start()
+
+    for worker in range(1, 65536):
+       q.put(worker)
+
+    q.join()
+
+    t2 = datetime.now()
+    total = t2 - t1
+    print("Port scan completed in "+str(total))
+    print(Fore.YELLOW + "=" * 60 + Fore.RESET)
+    t3 = datetime.now()
+    total1 = t3 - t1
+
+    def nmapAuto():
+        '''
+        Takes ports discovered and runs it through NMAP's service scan
+        '''
+
+        print("Running NMAP with service scan on ports\n")
+        outfile = "nmap -p{ports} -sV -sC -Pn -T4 {ip} -oA {ip}".format(ports=",".join(discovered_ports), ip=target)
+        print("nmap -p{ports} -sV -sC -T4 -Pn {ip} -oA {ip}".format(ports=",".join(discovered_ports), ip=target))
+
+        print(Fore.YELLOW + "=" * 60 + Fore.RESET)
+        
+        os.mkdir(target)
+        os.chdir(target)
+        os.system(outfile)
+
+        t3 = datetime.now()
+        total1 = t3 - t1
+        print(Fore.YELLOW + "=" * 60 + Fore.RESET)
+
+        print("Scan completed in "+str(total1))
+    nmapAuto()
+    exit()
+
+
+if __name__ == '__main__':
+    try:
+        main()
+    except KeyboardInterrupt:
+        print("\nGoodbye!")
+        quit()
